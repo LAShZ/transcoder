@@ -13,8 +13,8 @@ import (
 	"strconv"
 	"strings"
 
-	"transcoder"
-	"transcoder/utils"
+	"transcoderplus"
+	"transcoderplus/utils"
 )
 
 // Transcoder ...
@@ -23,7 +23,7 @@ type Transcoder struct {
 	input            []string
 	output           []string
 	options          [][]string
-	metadata         transcoder.Metadata
+	metadata         transcoderplus.Metadata
 	inputPipeReader  *io.ReadCloser
 	outputPipeReader *io.ReadCloser
 	inputPipeWriter  *io.WriteCloser
@@ -31,17 +31,17 @@ type Transcoder struct {
 }
 
 // New ...
-func New(cfg *Config) transcoder.Transcoder {
+func New(cfg *Config) transcoderplus.Transcoder {
 	return &Transcoder{config: cfg}
 }
 
 // Start ...
-func (t *Transcoder) Start(opts transcoder.Options) (<-chan transcoder.Progress, error) {
+func (t *Transcoder) Start(opts transcoderplus.Options) (<-chan transcoderplus.Progress, error) {
 
 	var stderrIn io.ReadCloser
 	var err error
 
-	out := make(chan transcoder.Progress)
+	out := make(chan transcoderplus.Progress)
 
 	defer t.closePipes()
 
@@ -50,8 +50,9 @@ func (t *Transcoder) Start(opts transcoder.Options) (<-chan transcoder.Progress,
 		return nil, err
 	}
 
+	// 不能使用，因为ffprobe不支持mulaw格式的识别
 	//Get file metadata
-	//_, err := t.GetMetadata()
+	//_, err = t.GetMetadata()
 	//if err != nil {
 	//	return nil, err
 	//}
@@ -126,28 +127,19 @@ func (t *Transcoder) Start(opts transcoder.Options) (<-chan transcoder.Progress,
 }
 
 // Input ...
-func (t *Transcoder) Input(arg string) transcoder.Transcoder {
-	//args := make([]string, 0)
-	//optionsLength := len(t.options)
-	//if optionsLength != 0 {
-	//	args = append(args, t.options[0]...)
-	//	t.options = t.options[1:]
-	//}
-	//args = append(args, "-i")
-	//args = append(args, arg)
-	//arg = strings.Join(args, " ")
+func (t *Transcoder) Input(arg string) transcoderplus.Transcoder {
 	t.input = append(t.input, arg)
 	return t
 }
 
 // Output ...
-func (t *Transcoder) Output(arg string) transcoder.Transcoder {
+func (t *Transcoder) Output(arg string) transcoderplus.Transcoder {
 	t.output = append(t.output, arg)
 	return t
 }
 
 // InputPipe ...
-func (t *Transcoder) InputPipe(w *io.WriteCloser, r *io.ReadCloser) transcoder.Transcoder {
+func (t *Transcoder) InputPipe(w *io.WriteCloser, r *io.ReadCloser) transcoderplus.Transcoder {
 	if &t.input == nil {
 		t.inputPipeWriter = w
 		t.inputPipeReader = r
@@ -156,7 +148,7 @@ func (t *Transcoder) InputPipe(w *io.WriteCloser, r *io.ReadCloser) transcoder.T
 }
 
 // OutputPipe ...
-func (t *Transcoder) OutputPipe(w *io.WriteCloser, r *io.ReadCloser) transcoder.Transcoder {
+func (t *Transcoder) OutputPipe(w *io.WriteCloser, r *io.ReadCloser) transcoderplus.Transcoder {
 	if &t.output == nil {
 		t.outputPipeWriter = w
 		t.outputPipeReader = r
@@ -165,13 +157,13 @@ func (t *Transcoder) OutputPipe(w *io.WriteCloser, r *io.ReadCloser) transcoder.
 }
 
 // WithOptions Sets the options object
-func (t *Transcoder) WithOptions(opts transcoder.Options) transcoder.Transcoder {
+func (t *Transcoder) WithOptions(opts transcoderplus.Options) transcoderplus.Transcoder {
 	t.options = [][]string{opts.GetStrArguments()}
 	return t
 }
 
 // WithAdditionalOptions Appends an additional options object
-func (t *Transcoder) WithAdditionalOptions(opts transcoder.Options) transcoder.Transcoder {
+func (t *Transcoder) WithAdditionalOptions(opts transcoderplus.Options) transcoderplus.Transcoder {
 	t.options = append(t.options, opts.GetStrArguments())
 	return t
 }
@@ -208,14 +200,15 @@ func (t *Transcoder) validate() error {
 }
 
 // GetMetadata Returns metadata for the specified input file
-func (t *Transcoder) GetMetadata() (transcoder.Metadata, error) {
+func (t *Transcoder) GetMetadata() (transcoderplus.Metadata, error) {
 
 	if t.config.FfprobeBinPath != "" {
-		var outb, errb bytes.Buffer
-		var metadata []Metadata
+		//var metadata []Metadata
 		var metapice Metadata
 
-		for _, input := range t.input {
+		input := t.input[0]
+
+			var outb, errb bytes.Buffer
 
 			if t.inputPipeReader != nil {
 				input = "pipe:"
@@ -235,8 +228,6 @@ func (t *Transcoder) GetMetadata() (transcoder.Metadata, error) {
 			}
 
 			t.metadata = metapice
-			metadata = append(metadata, metapice)
-		}
 
 		return metapice, nil
 	}
@@ -245,7 +236,7 @@ func (t *Transcoder) GetMetadata() (transcoder.Metadata, error) {
 }
 
 // progress sends through given channel the transcoding status
-func (t *Transcoder) progress(stream io.ReadCloser, out chan transcoder.Progress) {
+func (t *Transcoder) progress(stream io.ReadCloser, out chan transcoderplus.Progress) {
 
 	defer stream.Close()
 
