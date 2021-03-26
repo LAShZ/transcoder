@@ -305,6 +305,7 @@ func (t *Transcoder) progress(stream io.ReadCloser, out chan transcoderplus.Prog
 				}
 			}
 
+			// 都可以删，因为没有ffprobe
 			timesec := utils.DurToSec(currentTime)
 			dursec, _ := strconv.ParseFloat(t.metadata.GetFormat().GetDuration(), 64)
 
