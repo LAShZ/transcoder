@@ -39,6 +39,7 @@ func New(cfg *Config) transcoder.Transcoder {
 func (t *Transcoder) Start(opts transcoder.Options) (<-chan transcoder.Progress, error) {
 
 	var stderrIn io.ReadCloser
+	var err error
 
 	out := make(chan transcoder.Progress)
 
@@ -49,20 +50,24 @@ func (t *Transcoder) Start(opts transcoder.Options) (<-chan transcoder.Progress,
 		return nil, err
 	}
 
-	// Get file metadata
-	_, err := t.GetMetadata()
-	if err != nil {
-		return nil, err
-	}
+	//Get file metadata
+	//_, err := t.GetMetadata()
+	//if err != nil {
+	//	return nil, err
+	//}
 
 	// Append input file and standard options
-	arg := []string{"-i"}
+	arg := make([]string, 0)
 	arg = append(arg, t.input...)
-	args := append(arg, opts.GetStrArguments()...)
+	args := make([]string, 0)
+	for _, input := range t.input {
+		args = append(args, opts.GetStrArguments()...)
+		args = append(args, []string{"-i", input}...)
+	}
 	outputLength := len(t.output)
 	optionsLength := len(t.options)
 
-	if outputLength == 1 && optionsLength == 0 {
+	if optionsLength == 0 {
 		// Just append the 1 output file we've got
 		args = append(args, t.output[0])
 	} else {
@@ -90,7 +95,7 @@ func (t *Transcoder) Start(opts transcoder.Options) (<-chan transcoder.Progress,
 	if t.config.ProgressEnabled && !t.config.Verbose {
 		stderrIn, err = cmd.StderrPipe()
 		if err != nil {
-			return nil, fmt.Errorf("Failed getting transcoding progress (%s) with args (%s) with error %s", t.config.FfmpegBinPath, args, err)
+			return nil, fmt.Errorf("failed getting transcoding progress (%s) with args (%s) with error %s", t.config.FfmpegBinPath, args, err)
 		}
 	}
 
@@ -101,7 +106,7 @@ func (t *Transcoder) Start(opts transcoder.Options) (<-chan transcoder.Progress,
 	// Start process
 	err = cmd.Start()
 	if err != nil {
-		return nil, fmt.Errorf("Failed starting transcoding (%s) with args (%s) with error %s", t.config.FfmpegBinPath, args, err)
+		return nil, fmt.Errorf("failed starting transcoding (%s) with args (%s) with error %s", t.config.FfmpegBinPath, args, err)
 	}
 
 	if t.config.ProgressEnabled && !t.config.Verbose {
@@ -122,7 +127,16 @@ func (t *Transcoder) Start(opts transcoder.Options) (<-chan transcoder.Progress,
 
 // Input ...
 func (t *Transcoder) Input(arg string) transcoder.Transcoder {
-	t.input = append(t.input,arg)
+	//args := make([]string, 0)
+	//optionsLength := len(t.options)
+	//if optionsLength != 0 {
+	//	args = append(args, t.options[0]...)
+	//	t.options = t.options[1:]
+	//}
+	//args = append(args, "-i")
+	//args = append(args, arg)
+	//arg = strings.Join(args, " ")
+	t.input = append(t.input, arg)
 	return t
 }
 
@@ -194,41 +208,37 @@ func (t *Transcoder) validate() error {
 }
 
 // GetMetadata Returns metadata for the specified input file
-func (t *Transcoder) GetMetadata() ( transcoder.Metadata, error) {
+func (t *Transcoder) GetMetadata() (transcoder.Metadata, error) {
 
 	if t.config.FfprobeBinPath != "" {
 		var outb, errb bytes.Buffer
+		var metadata []Metadata
+		var metapice Metadata
 
-		input := t.input
+		for _, input := range t.input {
 
-		if t.inputPipeReader != nil {
-			input = []string{"pipe:"}
+			if t.inputPipeReader != nil {
+				input = "pipe:"
+			}
+
+			args := []string{"-i", input, "-print_format", "json", "-show_format", "-show_streams", "-show_error"}
+
+			cmd := exec.Command(t.config.FfprobeBinPath, args...)
+			cmd.Stdout = &outb
+			cmd.Stderr = &errb
+			err := cmd.Run()
+			if err != nil {
+				return nil, fmt.Errorf("error executing (%s) with args (%s) | error: %s | message: %s %s", t.config.FfprobeBinPath, args, err, outb.String(), errb.String())
+			}
+			if err := json.Unmarshal([]byte(outb.String()), &metapice); err != nil {
+				return nil, err
+			}
+
+			t.metadata = metapice
+			metadata = append(metadata, metapice)
 		}
 
-		args := []string{"-i"}
-		controlStr := []string{"-print_format", "json", "-show_format", "-show_streams", "-show_error"}
-		args = append(args, input...)
-		args = append(args, controlStr...)
-		//args := []string{"-i", input, "-print_format", "json", "-show_format", "-show_streams", "-show_error"}
-
-		cmd := exec.Command(t.config.FfprobeBinPath, args...)
-		cmd.Stdout = &outb
-		cmd.Stderr = &errb
-
-		err := cmd.Run()
-		if err != nil {
-			return nil, fmt.Errorf("error executing (%s) with args (%s) | error: %s | message: %s %s", t.config.FfprobeBinPath, args, err, outb.String(), errb.String())
-		}
-
-		var metadata Metadata
-
-		if err = json.Unmarshal([]byte(outb.String()), &metadata); err != nil {
-			return nil, err
-		}
-
-		t.metadata = metadata
-
-		return metadata, nil
+		return metapice, nil
 	}
 
 	return nil, errors.New("ffprobe binary not found")
@@ -324,11 +334,11 @@ func (t *Transcoder) progress(stream io.ReadCloser, out chan transcoder.Progress
 func (t *Transcoder) closePipes() {
 	if t.inputPipeReader != nil {
 		ipr := *t.inputPipeReader
-		ipr.Close()
+		_ = ipr.Close()
 	}
 
 	if t.outputPipeWriter != nil {
 		opr := *t.outputPipeWriter
-		opr.Close()
+		_ = opr.Close()
 	}
 }
