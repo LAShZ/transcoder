@@ -1,4 +1,4 @@
-package transcoder
+package transcoderplus
 
 // Config ...
 type Config interface{}

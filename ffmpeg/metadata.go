@@ -1,6 +1,6 @@
 package ffmpeg
 
-import "github.com/floostack/transcoder"
+import "transcoderplus"
 
 // Metadata ...
 type Metadata struct {
@@ -75,12 +75,12 @@ type Disposition struct {
 }
 
 // GetFormat ...
-func (m Metadata) GetFormat() transcoder.Format {
+func (m Metadata) GetFormat() transcoderplus.Format {
 	return m.Format
 }
 
 // GetStreams ...
-func (m Metadata) GetStreams() (streams []transcoder.Streams) {
+func (m Metadata) GetStreams() (streams []transcoderplus.Streams) {
 	for _, element := range m.Streams {
 		streams = append(streams, element)
 	}
@@ -133,7 +133,7 @@ func (f Format) GetProbeScore() int {
 }
 
 // GetTags ...
-func (f Format) GetTags() transcoder.Tags {
+func (f Format) GetTags() transcoderplus.Tags {
 	return f.Tags
 }
 
@@ -278,7 +278,7 @@ func (s Streams) GetDuration() string {
 }
 
 //GetDisposition ...
-func (s Streams) GetDisposition() transcoder.Disposition {
+func (s Streams) GetDisposition() transcoderplus.Disposition {
 	return s.Disposition
 }
 

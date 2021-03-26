@@ -13,17 +13,17 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/floostack/transcoder"
-	"github.com/floostack/transcoder/utils"
+	"transcoderplus"
+	"transcoderplus/utils"
 )
 
 // Transcoder ...
 type Transcoder struct {
 	config           *Config
-	input            string
+	input            []string
 	output           []string
 	options          [][]string
-	metadata         transcoder.Metadata
+	metadata         transcoderplus.Metadata
 	inputPipeReader  *io.ReadCloser
 	outputPipeReader *io.ReadCloser
 	inputPipeWriter  *io.WriteCloser
@@ -31,16 +31,17 @@ type Transcoder struct {
 }
 
 // New ...
-func New(cfg *Config) transcoder.Transcoder {
+func New(cfg *Config) transcoderplus.Transcoder {
 	return &Transcoder{config: cfg}
 }
 
 // Start ...
-func (t *Transcoder) Start(opts transcoder.Options) (<-chan transcoder.Progress, error) {
+func (t *Transcoder) Start(opts transcoderplus.Options) (<-chan transcoderplus.Progress, error) {
 
 	var stderrIn io.ReadCloser
+	var err error
 
-	out := make(chan transcoder.Progress)
+	out := make(chan transcoderplus.Progress)
 
 	defer t.closePipes()
 
@@ -49,18 +50,25 @@ func (t *Transcoder) Start(opts transcoder.Options) (<-chan transcoder.Progress,
 		return nil, err
 	}
 
-	// Get file metadata
-	_, err := t.GetMetadata()
-	if err != nil {
-		return nil, err
-	}
+	// 不能使用，因为ffprobe不支持mulaw格式的识别
+	//Get file metadata
+	//_, err = t.GetMetadata()
+	//if err != nil {
+	//	return nil, err
+	//}
 
 	// Append input file and standard options
-	args := append([]string{"-i", t.input}, opts.GetStrArguments()...)
+	arg := make([]string, 0)
+	arg = append(arg, t.input...)
+	args := make([]string, 0)
+	for _, input := range t.input {
+		args = append(args, opts.GetStrArguments()...)
+		args = append(args, []string{"-i", input}...)
+	}
 	outputLength := len(t.output)
 	optionsLength := len(t.options)
 
-	if outputLength == 1 && optionsLength == 0 {
+	if optionsLength == 0 {
 		// Just append the 1 output file we've got
 		args = append(args, t.output[0])
 	} else {
@@ -88,7 +96,7 @@ func (t *Transcoder) Start(opts transcoder.Options) (<-chan transcoder.Progress,
 	if t.config.ProgressEnabled && !t.config.Verbose {
 		stderrIn, err = cmd.StderrPipe()
 		if err != nil {
-			return nil, fmt.Errorf("Failed getting transcoding progress (%s) with args (%s) with error %s", t.config.FfmpegBinPath, args, err)
+			return nil, fmt.Errorf("failed getting transcoding progress (%s) with args (%s) with error %s", t.config.FfmpegBinPath, args, err)
 		}
 	}
 
@@ -99,7 +107,7 @@ func (t *Transcoder) Start(opts transcoder.Options) (<-chan transcoder.Progress,
 	// Start process
 	err = cmd.Start()
 	if err != nil {
-		return nil, fmt.Errorf("Failed starting transcoding (%s) with args (%s) with error %s", t.config.FfmpegBinPath, args, err)
+		return nil, fmt.Errorf("failed starting transcoding (%s) with args (%s) with error %s", t.config.FfmpegBinPath, args, err)
 	}
 
 	if t.config.ProgressEnabled && !t.config.Verbose {
@@ -119,19 +127,19 @@ func (t *Transcoder) Start(opts transcoder.Options) (<-chan transcoder.Progress,
 }
 
 // Input ...
-func (t *Transcoder) Input(arg string) transcoder.Transcoder {
-	t.input = arg
+func (t *Transcoder) Input(arg string) transcoderplus.Transcoder {
+	t.input = append(t.input, arg)
 	return t
 }
 
 // Output ...
-func (t *Transcoder) Output(arg string) transcoder.Transcoder {
+func (t *Transcoder) Output(arg string) transcoderplus.Transcoder {
 	t.output = append(t.output, arg)
 	return t
 }
 
 // InputPipe ...
-func (t *Transcoder) InputPipe(w *io.WriteCloser, r *io.ReadCloser) transcoder.Transcoder {
+func (t *Transcoder) InputPipe(w *io.WriteCloser, r *io.ReadCloser) transcoderplus.Transcoder {
 	if &t.input == nil {
 		t.inputPipeWriter = w
 		t.inputPipeReader = r
@@ -140,7 +148,7 @@ func (t *Transcoder) InputPipe(w *io.WriteCloser, r *io.ReadCloser) transcoder.T
 }
 
 // OutputPipe ...
-func (t *Transcoder) OutputPipe(w *io.WriteCloser, r *io.ReadCloser) transcoder.Transcoder {
+func (t *Transcoder) OutputPipe(w *io.WriteCloser, r *io.ReadCloser) transcoderplus.Transcoder {
 	if &t.output == nil {
 		t.outputPipeWriter = w
 		t.outputPipeReader = r
@@ -149,13 +157,13 @@ func (t *Transcoder) OutputPipe(w *io.WriteCloser, r *io.ReadCloser) transcoder.
 }
 
 // WithOptions Sets the options object
-func (t *Transcoder) WithOptions(opts transcoder.Options) transcoder.Transcoder {
+func (t *Transcoder) WithOptions(opts transcoderplus.Options) transcoderplus.Transcoder {
 	t.options = [][]string{opts.GetStrArguments()}
 	return t
 }
 
 // WithAdditionalOptions Appends an additional options object
-func (t *Transcoder) WithAdditionalOptions(opts transcoder.Options) transcoder.Transcoder {
+func (t *Transcoder) WithAdditionalOptions(opts transcoderplus.Options) transcoderplus.Transcoder {
 	t.options = append(t.options, opts.GetStrArguments())
 	return t
 }
@@ -166,7 +174,7 @@ func (t *Transcoder) validate() error {
 		return errors.New("ffmpeg binary path not found")
 	}
 
-	if t.input == "" {
+	if t.input == nil {
 		return errors.New("missing input option")
 	}
 
@@ -192,44 +200,43 @@ func (t *Transcoder) validate() error {
 }
 
 // GetMetadata Returns metadata for the specified input file
-func (t *Transcoder) GetMetadata() ( transcoder.Metadata, error) {
+func (t *Transcoder) GetMetadata() (transcoderplus.Metadata, error) {
 
 	if t.config.FfprobeBinPath != "" {
-		var outb, errb bytes.Buffer
+		//var metadata []Metadata
+		var metapice Metadata
 
-		input := t.input
+		input := t.input[0]
 
-		if t.inputPipeReader != nil {
-			input = "pipe:"
-		}
+			var outb, errb bytes.Buffer
 
-		args := []string{"-i", input, "-print_format", "json", "-show_format", "-show_streams", "-show_error"}
+			if t.inputPipeReader != nil {
+				input = "pipe:"
+			}
 
-		cmd := exec.Command(t.config.FfprobeBinPath, args...)
-		cmd.Stdout = &outb
-		cmd.Stderr = &errb
+			args := []string{"-i", input, "-print_format", "json", "-show_format", "-show_streams", "-show_error"}
 
-		err := cmd.Run()
-		if err != nil {
-			return nil, fmt.Errorf("error executing (%s) with args (%s) | error: %s | message: %s %s", t.config.FfprobeBinPath, args, err, outb.String(), errb.String())
-		}
+			cmd := exec.Command(t.config.FfprobeBinPath, args...)
+			cmd.Stdout = &outb
+			cmd.Stderr = &errb
+			err := cmd.Run()
+			if err != nil {
+				return nil, fmt.Errorf("error executing (%s) with args (%s) | error: %s | message: %s %s", t.config.FfprobeBinPath, args, err, outb.String(), errb.String())
+			}
+			if err := json.Unmarshal([]byte(outb.String()), &metapice); err != nil {
+				return nil, err
+			}
 
-		var metadata Metadata
+			t.metadata = metapice
 
-		if err = json.Unmarshal([]byte(outb.String()), &metadata); err != nil {
-			return nil, err
-		}
-
-		t.metadata = metadata
-
-		return metadata, nil
+		return metapice, nil
 	}
 
 	return nil, errors.New("ffprobe binary not found")
 }
 
 // progress sends through given channel the transcoding status
-func (t *Transcoder) progress(stream io.ReadCloser, out chan transcoder.Progress) {
+func (t *Transcoder) progress(stream io.ReadCloser, out chan transcoderplus.Progress) {
 
 	defer stream.Close()
 
@@ -298,6 +305,7 @@ func (t *Transcoder) progress(stream io.ReadCloser, out chan transcoder.Progress
 				}
 			}
 
+			// 都可以删，因为没有ffprobe
 			timesec := utils.DurToSec(currentTime)
 			dursec, _ := strconv.ParseFloat(t.metadata.GetFormat().GetDuration(), 64)
 
@@ -318,11 +326,11 @@ func (t *Transcoder) progress(stream io.ReadCloser, out chan transcoder.Progress
 func (t *Transcoder) closePipes() {
 	if t.inputPipeReader != nil {
 		ipr := *t.inputPipeReader
-		ipr.Close()
+		_ = ipr.Close()
 	}
 
 	if t.outputPipeWriter != nil {
 		opr := *t.outputPipeWriter
-		opr.Close()
+		_ = opr.Close()
 	}
 }
