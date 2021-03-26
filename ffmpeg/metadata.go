@@ -1,6 +1,6 @@
 package ffmpeg
 
-import "github.com/floostack/transcoder"
+import "transcoder"
 
 // Metadata ...
 type Metadata struct {

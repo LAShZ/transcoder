@@ -13,14 +13,14 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/floostack/transcoder"
-	"github.com/floostack/transcoder/utils"
+	"transcoder"
+	"transcoder/utils"
 )
 
 // Transcoder ...
 type Transcoder struct {
 	config           *Config
-	input            string
+	input            []string
 	output           []string
 	options          [][]string
 	metadata         transcoder.Metadata
@@ -56,7 +56,9 @@ func (t *Transcoder) Start(opts transcoder.Options) (<-chan transcoder.Progress,
 	}
 
 	// Append input file and standard options
-	args := append([]string{"-i", t.input}, opts.GetStrArguments()...)
+	arg := []string{"-i"}
+	arg = append(arg, t.input...)
+	args := append(arg, opts.GetStrArguments()...)
 	outputLength := len(t.output)
 	optionsLength := len(t.options)
 
@@ -120,7 +122,7 @@ func (t *Transcoder) Start(opts transcoder.Options) (<-chan transcoder.Progress,
 
 // Input ...
 func (t *Transcoder) Input(arg string) transcoder.Transcoder {
-	t.input = arg
+	t.input = append(t.input,arg)
 	return t
 }
 
@@ -166,7 +168,7 @@ func (t *Transcoder) validate() error {
 		return errors.New("ffmpeg binary path not found")
 	}
 
-	if t.input == "" {
+	if t.input == nil {
 		return errors.New("missing input option")
 	}
 
@@ -200,10 +202,14 @@ func (t *Transcoder) GetMetadata() ( transcoder.Metadata, error) {
 		input := t.input
 
 		if t.inputPipeReader != nil {
-			input = "pipe:"
+			input = []string{"pipe:"}
 		}
 
-		args := []string{"-i", input, "-print_format", "json", "-show_format", "-show_streams", "-show_error"}
+		args := []string{"-i"}
+		controlStr := []string{"-print_format", "json", "-show_format", "-show_streams", "-show_error"}
+		args = append(args, input...)
+		args = append(args, controlStr...)
+		//args := []string{"-i", input, "-print_format", "json", "-show_format", "-show_streams", "-show_error"}
 
 		cmd := exec.Command(t.config.FfprobeBinPath, args...)
 		cmd.Stdout = &outb
